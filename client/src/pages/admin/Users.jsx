@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, Power, KeyRound, X, Pencil } from 'lucide-react';
+import { Plus, Trash2, Power, KeyRound, X, Pencil, Search } from 'lucide-react';
 import AdminHeader from '../../components/admin/AdminHeader.jsx';
 import DataTable from '../../components/admin/DataTable.jsx';
 import { Modal, ConfirmDialog } from '../../components/common/Modal.jsx';
@@ -17,18 +17,22 @@ export default function Users() {
   const { user: me } = useAuth();
   const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 });
   const [students, setStudents] = useState([]);
+  const [studentQuery, setStudentQuery] = useState('');
+  const [studentLoading, setStudentLoading] = useState(false);
+  const [linkedStudentMap, setLinkedStudentMap] = useState({});
   const [teachers, setTeachers] = useState([]);
   const [role, setRole] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
-  const [editing, setEditing] = useState(null); // null = creating a new account; a user object = editing that one
+  const [editing, setEditing] = useState(null);
   const [resetTarget, setResetTarget] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [deleting, setDeleting] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(BLANK);
+  const searchDebounceRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,32 +40,60 @@ export default function Users() {
     catch (err) { toast.error(err.message); } finally { setLoading(false); }
   }, [page, role, search]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { api.get('/students?limit=50').then(({ data }) => setStudents(data.data.items)).catch(() => {}); }, []);
+
+  const fetchStudents = useCallback(async (query = '') => {
+    setStudentLoading(true);
+    try {
+      const { data: res } = await api.get(`/students?search=${encodeURIComponent(query)}&limit=20`);
+      setStudents(res.data.items || []);
+    } catch {
+      // silent — selector will show empty
+    } finally {
+      setStudentLoading(false);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => { fetchStudents(''); }, [fetchStudents]);
+
+  // Debounced search
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchStudents(studentQuery);
+    }, 350);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [studentQuery, fetchStudents]);
+
   useEffect(() => { api.get('/teachers?all=true').then(({ data }) => setTeachers(data.data.items)).catch(() => {}); }, []);
 
-  const openCreate = () => { setEditing(null); setForm(BLANK); setModal(true); };
-
-  // Pre-fills from effectiveStudents (the already-resolved list the
-  // backend computes from whichever of the legacy `student` field or the
-  // new `students` array actually has data — see
-  // server/models/User.js#toSafeJSON). This is also the one moment an old
-  // single-child account's legacy link gets folded into the new array:
-  // the admin opens this form (which loads the resolved list), adds a
-  // second child, and saves — the PUT payload naturally carries both
-  // children in `students` from then on. Nothing is migrated in bulk;
-  // this is the only place it happens, one account at a time, only when
-  // an admin actually touches that account.
-  const openEdit = (u) => {
-    setEditing(u);
-    setForm({
-      name: u.name, email: u.email, password: '', role: u.role, phone: u.phone || '',
-      students: (u.effectiveStudents || []).map((s) => s._id || s),
-      teacher: u.teacher?._id || u.teacher || '',
-    });
+  const openCreate = () => {
+    setEditing(null);
+    setForm(BLANK);
+    setLinkedStudentMap({});
+    setStudentQuery('');
     setModal(true);
   };
 
-  const closeModal = () => { setModal(false); setEditing(null); setForm(BLANK); };
+  const openEdit = (u) => {
+    setEditing(u);
+    const eff = u.effectiveStudents || [];
+    const map = {};
+    eff.forEach((s) => {
+      const id = s._id || s;
+      if (typeof s === 'object') map[id] = s;
+    });
+    setLinkedStudentMap(map);
+    setForm({
+      name: u.name, email: u.email, password: '', role: u.role, phone: u.phone || '',
+      students: eff.map((s) => s._id || s),
+      teacher: u.teacher?._id || u.teacher || '',
+    });
+    setStudentQuery('');
+    setModal(true);
+  };
+
+  const closeModal = () => { setModal(false); setEditing(null); setForm(BLANK); setLinkedStudentMap({}); setStudentQuery(''); };
 
   const save = async (e) => {
     e.preventDefault();
@@ -69,7 +101,7 @@ export default function Users() {
     try {
       const linking = { students: form.role === 'parent' || form.role === 'student' ? form.students : [], teacher: form.role === 'teacher' ? (form.teacher || null) : null };
       if (editing) {
-        const { password, ...rest } = form; // password isn't editable here — use Reset Password for that
+        const { password, ...rest } = form;
         const { data: res } = await api.put(`/users/${editing._id}`, { ...rest, ...linking });
         toast.success(res.message || 'User updated');
       } else {
@@ -97,6 +129,17 @@ export default function Users() {
     try { await api.delete(`/users/${deleting._id}`); toast.success('User deleted'); setDeleting(null); load(); }
     catch (err) { toast.error(err.message); } finally { setSaving(false); }
   };
+
+  const getStudentDisplay = (id) => {
+    if (linkedStudentMap[id]) {
+      const s = linkedStudentMap[id];
+      return `${s.firstName} ${s.lastName} (${s.rollNumber})`;
+    }
+    const s = students.find((x) => x._id === id);
+    return s ? `${s.firstName} ${s.lastName} (${s.rollNumber})` : id;
+  };
+
+  const availableStudents = students.filter((s) => !form.students.includes(s._id));
 
   return (
     <div>
@@ -157,26 +200,57 @@ export default function Users() {
           </div>
           {editing && <p className="rounded-xl bg-line/40 p-3 text-xs text-muted">To change this account's password, close this and use the key icon instead.</p>}
           {(form.role === 'parent' || form.role === 'student') && (
-            <Field label={form.role === 'parent' ? 'Link Children' : 'Link Student Record'} hint={form.role === 'parent' ? 'A parent account can be linked to more than one child.' : "The portal shows this student's own attendance, results and fees."}>
-              <div className="space-y-2">
+            <Field label={form.role === 'parent' ? 'Link Children' : 'Link Student Record'} hint={form.role === 'parent' ? 'A parent account can be linked to more than one child. Search by name or roll number.' : "The portal shows this student's own attendance, results and fees."}>
+              <div className="space-y-3">
                 {form.students.length > 0 && (
                   <ul className="flex flex-wrap gap-2">
-                    {form.students.map((id) => {
-                      const s = students.find((x) => x._id === id);
-                      return (
-                        <li key={id} className="flex items-center gap-1.5 rounded-lg bg-line/50 py-1 pl-3 pr-1.5 text-xs font-semibold">
-                          {s ? `${s.firstName} ${s.lastName} (${s.rollNumber})` : id}
-                          <button type="button" className="rounded p-0.5 hover:bg-line" onClick={() => setForm((f) => ({ ...f, students: f.students.filter((x) => x !== id) }))} aria-label={`Remove ${s ? s.firstName : 'student'}`}><X size={12} /></button>
-                        </li>
-                      );
-                    })}
+                    {form.students.map((id) => (
+                      <li key={id} className="flex items-center gap-1.5 rounded-lg bg-line/50 py-1 pl-3 pr-1.5 text-xs font-semibold">
+                        {getStudentDisplay(id)}
+                        <button type="button" className="rounded p-0.5 hover:bg-line" onClick={() => setForm((f) => ({ ...f, students: f.students.filter((x) => x !== id) }))} aria-label="Remove student"><X size={12} /></button>
+                      </li>
+                    ))}
                   </ul>
                 )}
                 {(form.role === 'parent' || form.students.length === 0) && (
-                  <Select value="" onChange={(e) => { const id = e.target.value; if (id) setForm((f) => ({ ...f, students: f.students.includes(id) ? f.students : [...f.students, id] })); }}>
-                    <option value="">— Add a student —</option>
-                    {students.filter((s) => !form.students.includes(s._id)).map((s) => <option key={s._id} value={s._id}>{s.firstName} {s.lastName} ({s.rollNumber})</option>)}
-                  </Select>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                      <input
+                        type="text"
+                        placeholder="Search students by name or roll number..."
+                        value={studentQuery}
+                        onChange={(e) => setStudentQuery(e.target.value)}
+                        className="input pl-9"
+                      />
+                    </div>
+                    <div className="rounded-xl border border-line bg-surface">
+                      {studentLoading ? (
+                        <p className="p-3 text-xs text-muted">Searching…</p>
+                      ) : availableStudents.length === 0 ? (
+                        <p className="p-3 text-xs text-muted">{studentQuery ? `No students found for "${studentQuery}"` : 'No more students available. Try searching.'}</p>
+                      ) : (
+                        <ul className="max-h-48 overflow-y-auto divide-y divide-line/50">
+                          {availableStudents.map((s) => (
+                            <li key={s._id}>
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-line/40"
+                                onClick={() => {
+                                  setForm((f) => ({ ...f, students: f.students.includes(s._id) ? f.students : [...f.students, s._id] }));
+                                  setLinkedStudentMap((m) => ({ ...m, [s._id]: s }));
+                                }}
+                              >
+                                <span className="font-medium">{s.firstName} {s.lastName}</span>
+                                <span className="text-xs text-muted">{s.rollNumber} · {s.class?.name} {s.class?.section}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    {form.students.length === 0 && <p className="text-xs text-muted">No student linked yet. Search and select above, or leave empty to remove link.</p>}
+                  </div>
                 )}
               </div>
             </Field>

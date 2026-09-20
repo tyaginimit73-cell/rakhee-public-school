@@ -5,12 +5,13 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { isClassAssignedToTeacher, isStudentAssignedToTeacher } from '../utils/teacherScope.js';
 
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
 // GET roster for a class + date (merges saved statuses)
 export const getRoster = asyncHandler(async (req, res) => {
   const { classId, date } = req.query;
   if (!classId || !date) throw new ApiError(400, 'classId and date are required');
-  // Admin can see any class's roster; a teacher only their own assigned
-  // classes — enforced here, not just by hiding the option in the UI.
+  if (!isValidObjectId(classId)) throw new ApiError(400, 'Invalid class ID format');
   if (req.user.role === 'teacher' && !(await isClassAssignedToTeacher(req.user.teacher, classId))) {
     throw new ApiError(403, 'You are not assigned to this class');
   }
@@ -23,27 +24,21 @@ export const getRoster = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { roster, saved: !!saved } });
 });
 
-const ATTENDANCE_STATUSES = ['Present', 'Absent', 'Late']; // must match the enum in models/Attendance.js
+const ATTENDANCE_STATUSES = ['Present', 'Absent', 'Late'];
 
 export const markAttendance = asyncHandler(async (req, res) => {
   const { classId, date, records } = req.body;
   if (!classId || !date || !Array.isArray(records)) throw new ApiError(400, 'classId, date and records are required');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError(400, 'date must be in YYYY-MM-DD format');
+  if (!isValidObjectId(classId)) throw new ApiError(400, 'Invalid class ID format');
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) throw new ApiError(400, 'date must be in YYYY-MM-DD format');
   if (req.user.role === 'teacher' && !(await isClassAssignedToTeacher(req.user.teacher, classId))) {
     throw new ApiError(403, 'You are not assigned to this class');
   }
 
-  // The frontend is never trusted for this: every record is checked for a
-  // well-formed student ID and an allowed status, duplicates within one
-  // submission are collapsed (keeping the first occurrence) rather than
-  // saved as two conflicting entries for the same student, and — the
-  // previous gap — findOneAndUpdate's upsert didn't actually run schema
-  // validators, so the status enum on the model wasn't being enforced on
-  // this path at all despite being declared.
   const seen = new Set();
   const clean = [];
   for (const r of records || []) {
-    if (!r?.studentId || !mongoose.Types.ObjectId.isValid(r.studentId)) {
+    if (!r?.studentId || !isValidObjectId(r.studentId)) {
       throw new ApiError(400, `Invalid student ID: ${r?.studentId}`);
     }
     if (!ATTENDANCE_STATUSES.includes(r.status)) {
@@ -56,9 +51,6 @@ export const markAttendance = asyncHandler(async (req, res) => {
   }
   if (!clean.length) throw new ApiError(400, 'At least one valid attendance record is required');
 
-  // Every submitted student must actually exist AND be enrolled in the
-  // selected class — otherwise attendance could be saved against a
-  // nonexistent student, or one who belongs to a different class entirely.
   const validCount = await Student.countDocuments({ _id: { $in: clean.map((r) => r.student) }, class: classId });
   if (validCount !== clean.length) {
     throw new ApiError(400, 'One or more students do not exist or are not enrolled in the selected class');
@@ -75,6 +67,7 @@ export const markAttendance = asyncHandler(async (req, res) => {
 // Summary for one student (used by portal + admin)
 export const studentSummary = asyncHandler(async (req, res) => {
   const studentId = req.params.studentId;
+  if (!isValidObjectId(studentId)) throw new ApiError(400, 'Invalid student ID format');
   if (req.user.role === 'teacher' && !(await isStudentAssignedToTeacher(req.user.teacher, studentId))) {
     throw new ApiError(403, 'This student is not in one of your assigned classes');
   }

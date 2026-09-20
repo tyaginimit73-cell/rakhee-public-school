@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Student } from '../models/Student.js';
 import { Result } from '../models/Result.js';
 import { Fee } from '../models/Fee.js';
@@ -7,13 +8,10 @@ import { Event } from '../models/Event.js';
 import { Document } from '../models/Document.js';
 import { ApiError } from './ApiError.js';
 
-// Extracted from the original single-student portalController.js so the
-// parent portal (one call per selected child) and the student portal (one
-// call for the student's own record) share exactly one implementation
-// instead of two copies that could quietly drift apart. Logic is
-// unchanged from the original — this is a refactor for reuse, not a
-// behavior change.
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
 export const getStudentOverview = async (studentId) => {
+  if (!isValidObjectId(studentId)) throw new ApiError(400, 'Invalid student ID format');
   const student = await Student.findById(studentId).populate('class', 'name section');
   if (!student) throw new ApiError(404, 'Student record not found');
 
@@ -46,8 +44,6 @@ export const getStudentOverview = async (studentId) => {
   };
 };
 
-// The notices/events/documents feed is identical for every portal visitor
-// regardless of role — extracted the same way, for the same reason.
 export const getSharedPortalContent = async () => {
   const [notices, events, documents] = await Promise.all([
     Notice.find({ isPublished: true }).sort('-publishDate').limit(6),

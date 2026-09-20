@@ -105,7 +105,14 @@ describe('teacher portal — scoped strictly to assigned classes', () => {
 
   before(async () => {
     baseUrl = await startTestServer();
-    const teacherProfile = await Teacher.create({ name: 'Ms Scope', designation: 'PGT' });
+    const teacherProfile = await Teacher.create({
+      name: 'Ms Scope',
+      designation: 'PGT',
+      qualification: 'M.Ed',
+      department: 'Science',
+      subjects: ['Physics'],
+      experienceYears: 5,
+    });
     ownClass = await Class.create({ name: 'Class 7', section: 'A', level: 'Middle', classTeacher: teacherProfile._id });
     otherClass = await Class.create({ name: 'Class 8', section: 'A', level: 'Middle' }); // no classTeacher — belongs to nobody
     ownStudent = await Student.create({ firstName: 'Own', lastName: 'Kid', gender: 'Male', dob: '2013-01-01', rollNumber: 'T001', class: ownClass._id, fatherName: 'F', motherName: 'M', phone: '9000000004', address: { line1: 'x', city: 'x', district: 'x', state: 'x', pincode: '123456' }, admissionDate: '2024-01-01' });
