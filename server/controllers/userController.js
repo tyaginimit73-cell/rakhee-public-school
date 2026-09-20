@@ -246,6 +246,12 @@ export const resetUserPassword = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id).select('+password');
   if (!user) throw new ApiError(404, 'User not found');
   user.password = req.body.newPassword;
+  // Rotate the password version so every session the target user still holds
+  // (cookie or Bearer) stops validating on its next request — a reset is
+  // usually a response to a compromised/lost password, so old sessions must
+  // die. Same mechanism as the self-service change in authController.js
+  // (PROJECT_AUDIT.md Phase 2 / M3). Password is never logged or echoed.
+  user.passwordVersion = (user.passwordVersion || 0) + 1;
   await user.save();
   res.json({ success: true, message: 'Password reset' });
 });

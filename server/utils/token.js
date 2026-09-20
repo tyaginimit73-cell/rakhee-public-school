@@ -1,7 +1,12 @@
 import jwt from 'jsonwebtoken';
 
-export const signToken = (userId) =>
-  jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+// `passwordVersion` (optional, defaults to 0) is embedded as the `pv` claim
+// and checked against the user document on every authenticated request —
+// see middleware/auth.js and the note on User.passwordVersion in models/User.js.
+// Keeping it optional in the signature means any caller that doesn't know the
+// version still produces a token that validates for never-rotated accounts.
+export const signToken = (userId, passwordVersion = 0) =>
+  jwt.sign({ id: userId, pv: passwordVersion || 0 }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
 
 export const setAuthCookie = (res, token) => {
   res.cookie('rps_token', token, {

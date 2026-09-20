@@ -30,7 +30,7 @@ export const login = asyncHandler(async (req, res) => {
   if (user.isActive === false) throw new ApiError(403, 'This account has been deactivated');
   user.lastLogin = new Date();
   await user.save({ validateBeforeSave: false });
-  const token = signToken(user._id);
+  const token = signToken(user._id, user.passwordVersion);
   setAuthCookie(res, token);
   res.json({ success: true, message: `Welcome back, ${user.name.split(' ')[0]}!`, data: { user: user.toSafeJSON(), token } });
 });
@@ -49,6 +49,11 @@ export const changePassword = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select('+password');
   if (!(await user.matchPassword(currentPassword))) throw new ApiError(400, 'Current password is incorrect');
   user.password = newPassword;
+  // Rotate the password version — every JWT issued before this moment now
+  // fails the version check in middleware/auth.js (PROJECT_AUDIT.md Phase 2 /
+  // M3). That includes the very session making this request; the user signs
+  // back in with the new password, which is the point of a rotation.
+  user.passwordVersion = (user.passwordVersion || 0) + 1;
   await user.save();
   res.json({ success: true, message: 'Password updated successfully' });
 });

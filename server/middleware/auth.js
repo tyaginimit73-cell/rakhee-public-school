@@ -9,6 +9,16 @@ const extractToken = (req) => {
   return null;
 };
 
+// Session invalidation check (PROJECT_AUDIT.md Phase 2 / M3): a token is only
+// valid if it was issued for the user's CURRENT password version. Tokens minted
+// before the last password change/reset carry an older `pv` (or none at all,
+// for sessions issued before this field existed) and are rejected here —
+// which is exactly "all old sessions die when the password rotates". Absent
+// claim and absent field both read as 0, so users whose password has never
+// rotated are completely unaffected.
+const tokenMatchesPasswordVersion = (decoded, user) =>
+  (decoded.pv || 0) === (user.passwordVersion || 0);
+
 export const protect = asyncHandler(async (req, res, next) => {
   const token = extractToken(req);
   if (!token) throw new ApiError(401, 'Not authenticated. Please sign in.');
@@ -16,6 +26,7 @@ export const protect = asyncHandler(async (req, res, next) => {
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
   const user = await User.findById(decoded.id).populate(['student', 'students', 'teacher']);
   if (!user || user.isActive === false) throw new ApiError(401, 'Account not found or deactivated');
+  if (!tokenMatchesPasswordVersion(decoded, user)) throw new ApiError(401, 'Session invalid or expired, please sign in again');
   req.user = user;
   next();
 });
@@ -35,7 +46,10 @@ export const optionalAuth = asyncHandler(async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).populate(['student', 'students', 'teacher']);
-    if (user && user.isActive !== false) req.user = user;
+    // Same rules as protect — deactivated OR pre-password-rotation sessions are
+    // simply treated as anonymous here instead of rejected (this route works
+    // unauthenticated, so a stale session must degrade, not fail).
+    if (user && user.isActive !== false && tokenMatchesPasswordVersion(decoded, user)) req.user = user;
   } catch {
     // Invalid/expired token on an optional-auth route — proceed anonymous
     // rather than reject; only `protect`-guarded routes require a valid

@@ -1,5 +1,10 @@
+import mongoose from 'mongoose';
 import { Teacher } from '../models/Teacher.js';
+import { User } from '../models/User.js';
+import { Class } from '../models/Class.js';
 import { ApiError } from '../utils/ApiError.js';
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const listTeachers = asyncHandler(async (req, res) => {
@@ -30,7 +35,28 @@ export const updateTeacher = asyncHandler(async (req, res) => {
 });
 
 export const deleteTeacher = asyncHandler(async (req, res) => {
-  const teacher = await Teacher.findByIdAndDelete(req.params.id);
+  const { id } = req.params;
+  if (!isValidObjectId(id)) throw new ApiError(400, 'Invalid teacher ID format');
+  const teacher = await Teacher.findById(id);
   if (!teacher) throw new ApiError(404, 'Teacher not found');
+
+  // Safe-deletion guard (PROJECT_AUDIT.md Phase 2 / L6), same pattern as
+  // classController.deleteClass: refuse instead of dangling references.
+  // Complete reference audit of every model in models/:
+  //   User.teacher (teacher login accounts) and Class.classTeacher
+  //   (which drives the teacher portal's class scoping) — nothing else
+  //   links here. No related record is ever auto-deleted.
+  const [linkedUsers, assignedClasses] = await Promise.all([
+    User.countDocuments({ teacher: id }),
+    Class.countDocuments({ classTeacher: id }),
+  ]);
+  const deps = [];
+  if (linkedUsers) deps.push(`${linkedUsers} linked user account(s)`);
+  if (assignedClasses) deps.push(`${assignedClasses} assigned class(es)`);
+  if (deps.length) {
+    throw new ApiError(400, `Cannot delete this teacher: still referenced by ${deps.join(', ')}. Delete or reassign those records first.`);
+  }
+
+  await Teacher.findByIdAndDelete(id);
   res.json({ success: true, message: 'Teacher deleted' });
 });

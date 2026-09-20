@@ -105,3 +105,85 @@ export const userUpdateSchema = z.object({
 export const userResetPasswordSchema = z.object({
   newPassword: z.string().min(8, 'Password must be at least 8 characters'),
 });
+
+// ---------------------------------------------------------------------------
+// Website settings (PUT /api/settings). Mirrors the REAL structure of
+// server/config/defaultSettings.js one-for-one — no invented fields, no
+// removed fields. Every field is optional because the endpoint is a
+// deep-merging partial update (controllers/settingsController.js): sending
+// only { site: { phone } } must keep working exactly as before.
+//
+// Unknown keys — including '__proto__', 'constructor' and 'prototype' — are
+// STRIPPED rather than rejected. Rationale: zod's default strip behavior is
+// the strictest option that cannot break the existing admin Settings page
+// (which always PUTs the full merged document it received from GET), while a
+// hard reject would fail the whole save if a legacy settings document ever
+// carried an extra key. settingsController.js additionally skips dangerous
+// keys inside deepMerge() as defense in depth.
+// ---------------------------------------------------------------------------
+const settingsSiteSchema = z.object({
+  schoolName: z.string().optional(),
+  tagline: z.string().optional(),
+  address: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  establishedYear: z.string().optional(),
+  affiliation: z.string().optional(),
+  board: z.string().optional(),
+  hours: z.string().optional(),
+});
+
+const settingsHeroSchema = z.object({
+  headline: z.string().optional(),
+  subtext: z.string().optional(),
+  image: z.string().optional(),
+});
+
+const settingsStatSchema = z.object({
+  label: z.string().optional(),
+  value: z.number().optional(), // homepage counters are numeric (useCountUp)
+  suffix: z.string().optional(),
+});
+
+const settingsAboutSchema = z.object({
+  intro: z.string().optional(),
+  vision: z.string().optional(),
+  mission: z.string().optional(),
+  values: z.array(z.string()).optional(),
+});
+
+const settingsPrincipalSchema = z.object({
+  name: z.string().optional(),
+  designation: z.string().optional(),
+  photo: z.string().optional(),
+  message: z.string().optional(),
+});
+
+const settingsSocialSchema = z.object({
+  facebook: z.string().optional(),
+  instagram: z.string().optional(),
+  youtube: z.string().optional(),
+});
+
+const settingsFacilityItemSchema = z.object({
+  label: z.string().optional(),
+  available: z.boolean().optional(),
+});
+
+const settingsFacilityGroupSchema = z.object({
+  group: z.string().optional(),
+  items: z.array(settingsFacilityItemSchema).optional(),
+});
+
+export const settingsUpdateSchema = z.object({
+  site: settingsSiteSchema.optional(),
+  announcement: z.string().optional(),
+  admissionOpen: z.boolean().optional(),
+  hero: settingsHeroSchema.optional(),
+  stats: z.array(settingsStatSchema).optional(),
+  about: settingsAboutSchema.optional(),
+  principal: settingsPrincipalSchema.optional(),
+  social: settingsSocialSchema.optional(),
+  facilities: z.array(settingsFacilityGroupSchema).optional(),
+  feesNote: z.string().optional(),
+});

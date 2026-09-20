@@ -1,5 +1,9 @@
 import mongoose from 'mongoose';
 import { Student } from '../models/Student.js';
+import { Fee } from '../models/Fee.js';
+import { Result } from '../models/Result.js';
+import { Attendance } from '../models/Attendance.js';
+import { User } from '../models/User.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { paged } from '../utils/paginate.js';
@@ -97,7 +101,30 @@ export const updateStudent = asyncHandler(async (req, res) => {
 export const deleteStudent = asyncHandler(async (req, res) => {
   const { id } = req.params;
   if (!isValidObjectId(id)) throw new ApiError(400, 'Invalid student ID format');
-  const student = await Student.findByIdAndDelete(id);
+  const student = await Student.findById(id);
   if (!student) throw new ApiError(404, 'Student not found');
+
+  // Safe-deletion guard (PROJECT_AUDIT.md Phase 2 / L6), same pattern as
+  // classController.deleteClass: REFUSE rather than silently orphan dependent
+  // records. Complete reference audit of every model in models/:
+  //   Fee.student, Result.student, Attendance.records.student,
+  //   User.student (legacy) and User.students[] — nothing else links here.
+  // No related record is ever auto-deleted; an admin must handle them first.
+  const [fees, results, attendanceDocs, linkedUsers] = await Promise.all([
+    Fee.countDocuments({ student: id }),
+    Result.countDocuments({ student: id }),
+    Attendance.countDocuments({ 'records.student': id }),
+    User.countDocuments({ $or: [{ student: id }, { students: id }] }),
+  ]);
+  const deps = [];
+  if (fees) deps.push(`${fees} fee record(s)`);
+  if (results) deps.push(`${results} result record(s)`);
+  if (attendanceDocs) deps.push(`${attendanceDocs} attendance record(s)`);
+  if (linkedUsers) deps.push(`${linkedUsers} linked user account(s)`);
+  if (deps.length) {
+    throw new ApiError(400, `Cannot delete this student: still referenced by ${deps.join(', ')}. Delete or reassign those records first.`);
+  }
+
+  await Student.findByIdAndDelete(id);
   res.json({ success: true, message: 'Student deleted' });
 });
