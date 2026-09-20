@@ -2,6 +2,7 @@ import { Enquiry } from '../models/Enquiry.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { paged } from '../utils/paginate.js';
+import { queryParam } from '../validators/index.js';
 
 export const submitEnquiry = asyncHandler(async (req, res) => {
   await Enquiry.create(req.body);
@@ -9,7 +10,9 @@ export const submitEnquiry = asyncHandler(async (req, res) => {
 });
 
 export const listEnquiries = asyncHandler(async (req, res) => {
-  const filter = req.query.status ? { status: req.query.status } : {};
+  // queryParam() drops operator-style objects (?status[$ne]=x) — Phase 4A.
+  const status = queryParam(req.query.status);
+  const filter = status ? { status } : {};
   const data = await paged(Enquiry.find(filter).sort('-createdAt'), req, Enquiry.countDocuments(filter));
   res.json({ success: true, data });
 });

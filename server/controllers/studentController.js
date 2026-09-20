@@ -9,6 +9,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { paged } from '../utils/paginate.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
 import { getAssignedClassIds, isStudentAssignedToTeacher, isClassAssignedToTeacher } from '../utils/teacherScope.js';
+import { queryParam } from '../validators/index.js';
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -20,7 +21,12 @@ const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 const TEACHER_EDITABLE_STUDENT_FIELDS = ['firstName', 'lastName', 'phone', 'email', 'address', 'fatherName', 'motherName', 'bloodGroup'];
 
 export const listStudents = asyncHandler(async (req, res) => {
-  const { classId, search = '', status } = req.query;
+  const { classId } = req.query;
+  // queryParam(): operator-style values like ?status[$ne]=x arrive as
+  // objects under Express's extended query parser and are ignored here
+  // instead of landing in the Mongo filter (Phase 4A).
+  const search = queryParam(req.query.search) ?? '';
+  const status = queryParam(req.query.status);
   const filter = {};
   if (classId) {
     if (!isValidObjectId(classId)) throw new ApiError(400, 'Invalid class ID format');

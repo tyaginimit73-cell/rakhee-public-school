@@ -3,9 +3,12 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { paged } from '../utils/paginate.js';
 import { cleanupReplacedPublicFile } from '../utils/fileCleanup.js';
+import { queryParam } from '../validators/index.js';
 
 export const listNotices = asyncHandler(async (req, res) => {
-  const { category, all } = req.query;
+  const { all } = req.query;
+  // queryParam() drops operator-style objects (?category[$ne]=x) — Phase 4A.
+  const category = queryParam(req.query.category);
   const filter = {};
   // See teacherController.js for why this checks req.user via optionalAuth.
   if (!(all && req.user?.role === 'admin')) filter.isPublished = true;

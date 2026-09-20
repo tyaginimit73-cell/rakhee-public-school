@@ -21,7 +21,7 @@ export const authLimiter = make(15 * 60 * 1000, 40, 'Too many attempts, please t
 
 // Admission submission: a real family submits once (rarely a handful of
 // times while fixing validation errors). 10/hour deters bulk/spam submits.
-export const admissionSubmitLimiter = make(60 * 60 * 1000, 10, 'Too many applications submitted from this network. Please try again later or contact the school office.');
+export const admissionSubmitLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, skip: () => process.env.NODE_ENV === 'test', message: { success: false, message: 'Too many applications submitted from this network. Please try again later or contact the school office.' }, });
 
 // Document upload immediately follows a submission and may include a
 // retry or two; a little looser than submission itself.

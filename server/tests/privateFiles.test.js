@@ -55,8 +55,8 @@ describe('private uploads are never reachable via the public /uploads/ static ro
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         studentName: 'Private File Test', dob: '2015-05-10', gender: 'Male', classApplyingFor: 'Class 1',
-        fatherName: 'F', motherName: 'M', phone: '9998887777',
-        address: { line1: 'x', city: 'x', district: 'x', state: 'x', pincode: '123456' },
+        fatherName: 'Father', motherName: 'Mother', phone: '9998887777',
+        address: { line1: 'Test Address', city: 'Meerut', district: 'Meerut', state: 'UP', pincode: '250001' },
       }),
     }).then((r) => r.json());
 

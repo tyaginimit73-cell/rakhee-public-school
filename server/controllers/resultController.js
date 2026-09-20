@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { paged } from '../utils/paginate.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
+import { queryParam } from '../validators/index.js';
 
 const toDateStr = (d) => new Date(d).toISOString().slice(0, 10);
 
@@ -25,8 +26,10 @@ export const checkResult = asyncHandler(async (req, res) => {
 // Admin
 export const listResults = asyncHandler(async (req, res) => {
   const filter = {};
-  if (req.query.search) {
-    const students = await Student.find({ rollNumber: new RegExp(escapeRegex(req.query.search), 'i') }).select('_id');
+  // queryParam() drops operator-style objects — Phase 4A.
+  const search = queryParam(req.query.search);
+  if (search) {
+    const students = await Student.find({ rollNumber: new RegExp(escapeRegex(search), 'i') }).select('_id');
     filter.student = { $in: students.map((s) => s._id) };
   }
   const data = await paged(

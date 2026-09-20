@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { paged } from '../utils/paginate.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
+import { queryParam } from '../validators/index.js';
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -95,7 +96,9 @@ const assertNotLastActiveAdmin = async (targetUser, action) => {
 };
 
 export const listUsers = asyncHandler(async (req, res) => {
-  const { role, search = '' } = req.query;
+  // queryParam() drops operator-style objects (?role[$ne]=x) — Phase 4A.
+  const role = queryParam(req.query.role);
+  const search = queryParam(req.query.search) ?? '';
   const filter = {};
   if (role) filter.role = role;
   if (search) {

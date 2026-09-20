@@ -4,12 +4,16 @@ import { Student } from '../models/Student.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { isClassAssignedToTeacher, isStudentAssignedToTeacher } from '../utils/teacherScope.js';
+import { queryParam } from '../validators/index.js';
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 // GET roster for a class + date (merges saved statuses)
 export const getRoster = asyncHandler(async (req, res) => {
-  const { classId, date } = req.query;
+  const { classId } = req.query;
+  // queryParam() keeps operator-style objects (?date[$ne]=x) out of the
+  // Attendance lookup below — Phase 4A.
+  const date = queryParam(req.query.date);
   if (!classId || !date) throw new ApiError(400, 'classId and date are required');
   if (!isValidObjectId(classId)) throw new ApiError(400, 'Invalid class ID format');
   if (req.user.role === 'teacher' && !(await isClassAssignedToTeacher(req.user.teacher, classId))) {

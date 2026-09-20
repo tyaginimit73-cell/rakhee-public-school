@@ -3,12 +3,15 @@ import { Teacher } from '../models/Teacher.js';
 import { User } from '../models/User.js';
 import { Class } from '../models/Class.js';
 import { ApiError } from '../utils/ApiError.js';
+import { queryParam } from '../validators/index.js';
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const listTeachers = asyncHandler(async (req, res) => {
-  const { department, all } = req.query;
+  const { all } = req.query;
+  // queryParam() drops operator-style objects (?department[$ne]=x) — Phase 4A.
+  const department = queryParam(req.query.department);
   const filter = {};
   // `all=true` bypasses the public isActive filter — previously available
   // to anyone unauthenticated, now only to an actual authenticated admin

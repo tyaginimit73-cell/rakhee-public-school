@@ -8,7 +8,7 @@ import { escapeRegex } from '../utils/escapeRegex.js';
 import { signAdmissionUploadToken, verifyAdmissionUploadToken } from '../utils/token.js';
 import { cleanupFiles } from '../middleware/upload.js';
 import { privateUploadDir } from '../utils/paths.js';
-import { trackSchema } from '../validators/index.js';
+import { trackSchema, queryParam } from '../validators/index.js';
 
 // Public: submit application
 export const submitAdmission = asyncHandler(async (req, res) => {
@@ -102,7 +102,9 @@ export const trackAdmission = asyncHandler(async (req, res) => {
 
 // Admin
 export const listAdmissions = asyncHandler(async (req, res) => {
-  const { status, search = '' } = req.query;
+  // queryParam() drops operator-style objects (?status[$ne]=x) — Phase 4A.
+  const status = queryParam(req.query.status);
+  const search = queryParam(req.query.search) ?? '';
   const filter = {};
   if (status) filter.status = status;
   if (search) {
