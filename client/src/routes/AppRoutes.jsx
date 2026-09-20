@@ -6,7 +6,7 @@ import PortalLayout from '../layouts/PortalLayout.jsx';
 import ProtectedRoute from '../components/common/ProtectedRoute.jsx';
 import { FullPageLoader } from '../components/common/Loader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { GraduationCap, CalendarCheck, Users, BookOpen } from 'lucide-react';
+import { GraduationCap, CalendarCheck, Users as UsersIcon, BookOpen } from 'lucide-react';
 
 // Public pages (eager: home, lazy: rest for code-splitting)
 import Home from '../pages/public/Home.jsx';
@@ -69,7 +69,7 @@ function LegacyPortalRedirect() {
   return <Navigate to={ROLE_HOME[user?.role] || '/login'} replace />;
 }
 
-const PARENT_NAV = [{ to: '/parent', label: 'My Children', icon: Users, end: true }];
+const PARENT_NAV = [{ to: '/parent', label: 'My Children', icon: UsersIcon, end: true }];
 const STUDENT_NAV = [{ to: '/student', label: 'My Portal', icon: GraduationCap, end: true }];
 const TEACHER_NAV = [
   { to: '/teacher', label: 'Overview', icon: GraduationCap, end: true },

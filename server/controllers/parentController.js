@@ -1,8 +1,11 @@
+import mongoose from 'mongoose';
 import { Student } from '../models/Student.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getLinkedStudentIds, hasLinkedStudent } from '../utils/linkedStudents.js';
 import { getStudentOverview, getSharedPortalContent } from '../utils/studentOverview.js';
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 // Enough detail for a child-selector UI (name, class, roll number) — not
 // the full per-child overview, which is a separate, heavier call so
@@ -24,6 +27,9 @@ export const listMyChildren = asyncHandler(async (req, res) => {
 // child by editing the id in the request.
 export const getChildOverview = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
+  if (!isValidObjectId(studentId)) {
+    throw new ApiError(400, 'Invalid student ID format');
+  }
   if (!hasLinkedStudent(req.user, studentId)) {
     throw new ApiError(403, 'This student is not linked to your account');
   }

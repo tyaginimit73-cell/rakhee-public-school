@@ -11,8 +11,8 @@ describe('?all=true is admin-gated, not just parameter-gated', () => {
   before(async () => {
     baseUrl = await startTestServer();
     await User.create({ name: 'Admin', email: 'admin2@test.local', password: 'CorrectHorse123', role: 'admin' });
-    await Teacher.create({ name: 'Active Teacher', designation: 'PGT', isActive: true });
-    await Teacher.create({ name: 'Retired Teacher', designation: 'Former Staff', isActive: false });
+    await Teacher.create({ name: 'Active Teacher', designation: 'PGT', qualification: 'M.Ed', department: 'Science', isActive: true });
+    await Teacher.create({ name: 'Retired Teacher', designation: 'Former Staff', qualification: 'M.A', department: 'Arts', isActive: false });
 
     const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
