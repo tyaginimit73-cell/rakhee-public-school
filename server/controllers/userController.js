@@ -65,6 +65,35 @@ const validateTeacherId = async (teacherId) => {
   return teacherId;
 };
 
+// Last-admin protection (PROJECT_AUDIT.md Phase 1 / M5): the system must
+// never end up with zero active admin accounts — there is no password-reset
+// email or backdoor, so a lockout here is unrecoverable without touching the
+// database directly. Throws unless at least one OTHER active admin would
+// remain after the target account is removed from the active-admin set.
+// `action` is only used to phrase the error message ('deleted', 'deactivated',
+// 'demoted'). No-op for non-admin or already-inactive targets.
+//
+// Checked BEFORE the self-action checks in delete/toggle below: the acting
+// user is always an active admin themselves (these routes require protect +
+// authorize('admin')), so for actions on ANOTHER user this guard can never
+// fire while normal admin management is happening — it only bites when the
+// target genuinely is the last active admin, including an admin acting on
+// their own account.
+const assertNotLastActiveAdmin = async (targetUser, action) => {
+  if (!targetUser || targetUser.role !== 'admin' || targetUser.isActive === false) return;
+  const otherActiveAdmins = await User.countDocuments({
+    role: 'admin',
+    isActive: { $ne: false },
+    _id: { $ne: targetUser._id },
+  });
+  if (otherActiveAdmins === 0) {
+    throw new ApiError(
+      400,
+      `This account is the last active admin. It cannot be ${action} — at least one active admin account must remain.`,
+    );
+  }
+};
+
 export const listUsers = asyncHandler(async (req, res) => {
   const { role, search = '' } = req.query;
   const filter = {};
@@ -135,6 +164,12 @@ export const updateUser = asyncHandler(async (req, res) => {
   if (phone !== undefined) update.phone = phone;
 
   const newRole = role !== undefined ? role : existingUser.role;
+
+  // Last-admin protection: demoting the last active admin locks everyone out.
+  // Only relevant when the role is actually changing away from admin.
+  if (role !== undefined && role !== 'admin' && existingUser.role === 'admin' && existingUser.isActive !== false) {
+    await assertNotLastActiveAdmin(existingUser, 'demoted');
+  }
 
   // Students handling: detect if field was explicitly provided
   const hasStudentsKey = Object.prototype.hasOwnProperty.call(req.body, 'students');
@@ -216,16 +251,24 @@ export const resetUserPassword = asyncHandler(async (req, res) => {
 });
 
 export const deleteUser = asyncHandler(async (req, res) => {
-  if (String(req.user._id) === req.params.id) throw new ApiError(400, 'You cannot delete your own account');
-  const user = await User.findByIdAndDelete(req.params.id);
+  const user = await User.findById(req.params.id);
   if (!user) throw new ApiError(404, 'User not found');
+  // Guard order matters: last-admin check first (covers an admin deleting
+  // their own account when they are the only admin), then the self-delete
+  // rule (which keeps its own clearer message whenever another admin exists).
+  await assertNotLastActiveAdmin(user, 'deleted');
+  if (String(req.user._id) === String(user._id)) throw new ApiError(400, 'You cannot delete your own account');
+  await User.findByIdAndDelete(user._id);
   res.json({ success: true, message: 'User deleted' });
 });
 
 export const toggleUser = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
   if (!user) throw new ApiError(404, 'User not found');
-  if (String(req.user._id) === req.params.id) throw new ApiError(400, 'You cannot deactivate your own account');
+  // Only a toggle that would DEACTIVATE an admin can cause a lockout —
+  // re-activating an inactive admin is always safe and never guarded.
+  if (user.isActive !== false) await assertNotLastActiveAdmin(user, 'deactivated');
+  if (String(req.user._id) === String(user._id)) throw new ApiError(400, 'You cannot deactivate your own account');
   user.isActive = !user.isActive;
   await user.save();
   res.json({ success: true, message: `User ${user.isActive ? 'activated' : 'deactivated'}`, data: user.toSafeJSON() });

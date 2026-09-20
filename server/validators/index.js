@@ -79,3 +79,29 @@ export const changePasswordSchema = z.object({
   currentPassword: z.string().min(6),
   newPassword: z.string().min(8, 'New password must be at least 8 characters'),
 });
+
+// Admin updating an existing user (PUT /api/users/:id). Every field is
+// optional (partial updates are the existing contract — see
+// controllers/userController.js, which uses key *presence* to decide
+// whether a link is being set vs preserved), but NOTHING outside this
+// shape survives: the validate() middleware replaces req.body with the
+// parsed result, so arbitrary/mass-assigned fields are stripped before
+// the controller ever sees them. Link fields accept the exact same shapes
+// the controller's normalizeStudentInput/normalizeTeacherInput already
+// handle — arrays, single strings, '' and null (explicit removal).
+export const userUpdateSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').optional(),
+  email: z.string().email('Enter a valid email').optional(),
+  role: z.enum(['admin', 'teacher', 'parent', 'student']).optional(),
+  phone: z.string().optional().or(z.literal('')),
+  student: z.string().optional().or(z.literal('')).nullable(), // legacy single-child link — same compat rule as userCreateSchema
+  students: z.union([z.array(z.string()), z.string()]).nullable().optional(), // set (array/single) or clear (null/'')
+  teacher: z.string().optional().or(z.literal('')).nullable(),
+});
+
+// Admin resetting another user's password (PATCH /api/users/:id/password).
+// Same minimum strength as user creation and self-service change-password —
+// previously this path only enforced the model's 6-character minimum.
+export const userResetPasswordSchema = z.object({
+  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+});

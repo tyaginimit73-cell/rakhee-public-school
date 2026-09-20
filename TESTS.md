@@ -266,3 +266,37 @@ of static verification available without network access. They have **not**
 been observed to pass, because this sandbox cannot install the packages
 needed to run them. Run `npm install && npm test` in `server/` to get a real
 answer.
+
+## Phase 1 authorization hardening — test status (added 2026-09-20)
+
+A new test file, `tests/authorizationHardening.test.js`, covers the Phase 1
+hardening pass (H1 teacher student-write scoping, M5 user-update Zod
+validation + last-active-admin protection, L3 reset-password strength). It
+is written against the same `helpers/testServer.js` harness as every other
+integration test here.
+
+What was and wasn't verified, precisely:
+
+- `node --check` passes on every changed backend file
+  (`controllers/studentController.js`, `controllers/userController.js`,
+  `validators/index.js`, `routes/userRoutes.js`) and on the new test file.
+- The npm registry IS reachable from the current sandbox (`npm ci` in
+  `server/` succeeds), which is a change from the environment described at
+  the top of this document. However `fastdl.mongodb.org` — the CDN that
+  `mongodb-memory-server` downloads the real `mongod` binary from on first
+  use — is **not** reachable (TLS connection reset by the sandbox's network
+  allowlist), so `npm test` still cannot execute: it fails in every test's
+  `before()` hook at the binary download step. The integration tests
+  (including the new file) therefore remain **written and syntax-checked,
+  not observed to pass**.
+- The dependency-free parts of the change WERE executed directly, with 20/20
+  assertions passing: `userUpdateSchema` (accepts the exact payload the
+  admin Users page sends; accepts `students` as array/single-string/null/''
+  and preserves present-vs-absent key semantics; rejects bad emails, bad
+  roles, non-string ids; strips unknown fields incl. a `__proto__` key with
+  no prototype pollution), `userResetPasswordSchema` (rejects <8 chars), and
+  the `validate()` middleware (400 + message on failure; replaces `req.body`
+  with the stripped parsed data on success).
+
+To get the definitive answer, run `npm install && npm test` in `server/` in
+any environment with network access to `fastdl.mongodb.org`.
