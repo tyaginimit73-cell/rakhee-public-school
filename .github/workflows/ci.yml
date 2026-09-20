@@ -1,0 +1,50 @@
+# Minimal CI for Rakhee Public School (Phase 4C).
+#
+# Two independent jobs, exactly as recommended by the production-readiness
+# audit — nothing more, because there is no configured lint/typecheck step
+# to run today:
+#
+#   server — npm ci + npm test (node --test; the suites use
+#            mongodb-memory-server, which downloads its mongod binary on
+#            first use — GitHub-hosted runners have the network access for
+#            that, unlike the sandbox the project was built in)
+#   client — npm ci + npm run build (Vite production build: catches syntax,
+#            import and bundling errors)
+#
+# Both apps pin their trees via package-lock.json, so npm ci is reliable.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+
+  client:
+    name: Client build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
