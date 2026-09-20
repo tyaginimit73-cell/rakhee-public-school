@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Link, Outlet, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import Logo from '../components/common/Logo.jsx';
 import ThemeToggle from '../components/common/ThemeToggle.jsx';
 import SearchInput from '../components/common/SearchInput.jsx';
+import useFocusTrap from '../hooks/useFocusTrap.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useDebounce } from '../hooks/useDebounce.js';
 import api from '../services/api.js';
@@ -90,15 +91,21 @@ export default function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const drawerRef = useRef(null);
 
-  // Same gap as the public Navbar's mobile drawer had: no way to close
-  // this with the keyboard. Fixed the same way, here specifically (no
-  // existing effect tied to `open` in this component to extend).
+  // Mobile-drawer focus management: Escape-to-close (which had to be added
+  // to this component in an earlier pass) now comes from the shared
+  // useFocusTrap hook, along with initial focus into the drawer, Tab
+  // trapping, and focus restoration to the hamburger on close. The dialog
+  // semantics are applied ONLY to the mobile drawer panel below — the
+  // desktop sidebar (the other render of `sidebar`) stays a plain landmark.
+  useFocusTrap(drawerRef, open, () => setOpen(false));
+
+  // Body scroll lock while the mobile drawer is open — matches the Navbar's
+  // pre-existing behavior so the page behind can't be scrolled away.
   useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    document.body.style.overflow = open ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
   }, [open]);
 
   const doLogout = async () => { await logout(); navigate('/login'); };
@@ -130,7 +137,9 @@ export default function AdminLayout() {
         {open && (
           <motion.div className="fixed inset-0 z-[70] lg:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="absolute inset-0 bg-navy-950/60" onClick={() => setOpen(false)} aria-hidden />
-            <motion.aside className="absolute inset-y-0 left-0 w-72" initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }}>
+            <motion.aside ref={drawerRef} id="admin-drawer" role="dialog" aria-modal="true" aria-label="Admin navigation" tabIndex={-1}
+              className="absolute inset-y-0 left-0 w-72 outline-none"
+              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }}>
               {sidebar}
             </motion.aside>
           </motion.div>
@@ -139,7 +148,7 @@ export default function AdminLayout() {
 
       <div className="flex min-h-screen flex-1 flex-col lg:pl-64">
         <div className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-surface/85 px-4 backdrop-blur-xl sm:px-6">
-          <button type="button" className="btn-icon lg:hidden" onClick={() => setOpen(true)} aria-label="Open sidebar"><Menu size={20} /></button>
+          <button type="button" className="btn-icon lg:hidden" onClick={() => setOpen(true)} aria-label="Open sidebar" aria-expanded={open} aria-controls="admin-drawer"><Menu size={20} /></button>
           <GlobalSearch />
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, Megaphone, GraduationCap, LogIn, LayoutDashboard } from 'lucide-react';
 import Logo from '../common/Logo.jsx';
 import ThemeToggle from '../common/ThemeToggle.jsx';
+import useFocusTrap from '../../hooks/useFocusTrap.js';
 import { useSettings } from '../../context/SettingsContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { cx } from '../../utils/format.js';
@@ -28,6 +29,12 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [barOpen, setBarOpen] = useState(true);
+  const drawerRef = useRef(null);
+
+  // Escape handling, focus trapping and focus restoration all come from
+  // useFocusTrap below — this effect keeps ONLY the pre-existing body
+  // scroll lock (no second Escape listener).
+  useFocusTrap(drawerRef, open, () => setOpen(false));
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -37,10 +44,7 @@ export default function Navbar() {
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
-    if (!open) return () => { document.body.style.overflow = ''; };
-    const onKeyDown = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('keydown', onKeyDown);
-    return () => { document.body.style.overflow = ''; document.removeEventListener('keydown', onKeyDown); };
+    return () => { document.body.style.overflow = ''; };
   }, [open]);
 
   const portalPath = user?.role === 'admin' ? '/admin' : '/portal';
@@ -91,7 +95,7 @@ export default function Navbar() {
 
           <div className="flex items-center gap-1 xl:hidden">
             <ThemeToggle />
-            <button type="button" className="btn-icon" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={22} /></button>
+            <button type="button" className="btn-icon" onClick={() => setOpen(true)} aria-label="Open menu" aria-expanded={open} aria-controls="mobile-menu"><Menu size={22} /></button>
           </div>
         </div>
       </div>
@@ -101,7 +105,8 @@ export default function Navbar() {
         {open && (
           <motion.div className="fixed inset-0 z-[80] xl:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="absolute inset-0 bg-navy-950/60 backdrop-blur-sm" onClick={() => setOpen(false)} aria-hidden />
-            <motion.div className="absolute right-0 top-0 flex h-full w-[86%] max-w-sm flex-col bg-surface shadow-lift"
+            <motion.div ref={drawerRef} id="mobile-menu" role="dialog" aria-modal="true" aria-label="Main menu" tabIndex={-1}
+              className="absolute right-0 top-0 flex h-full w-[86%] max-w-sm flex-col bg-surface shadow-lift outline-none"
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }}>
               <div className="flex items-center justify-between border-b border-line p-4">
                 <Logo />

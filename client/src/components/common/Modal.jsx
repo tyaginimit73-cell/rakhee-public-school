@@ -1,42 +1,20 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle } from 'lucide-react';
-
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+import useFocusTrap from '../../hooks/useFocusTrap.js';
 
 export function Modal({ open, onClose, title, children, size = 'max-w-lg' }) {
   const dialogRef = useRef(null);
-  const previouslyFocused = useRef(null);
 
+  // Focus management (initial focus into the dialog, Escape to close,
+  // Tab/Shift+Tab trap, focus restoration on close) lives in the shared
+  // useFocusTrap hook — the exact logic that used to be inline here, so the
+  // mobile navigation drawers could reuse it instead of duplicating it.
   // Previously this modal had no Escape handling, no focus trap, and no
   // focus restoration — a keyboard user tabbing when it opened kept
   // tabbing through the (visually hidden) page behind the backdrop, with
-  // no way to close it without a mouse. Lightbox.jsx elsewhere in this
-  // codebase already gets the Escape part right; this brings Modal in
-  // line and adds the trap/restoration Lightbox doesn't need (it has no
-  // focusable children of its own to trap between).
-  useEffect(() => {
-    if (!open) return undefined;
-    previouslyFocused.current = document.activeElement;
-    const focusables = dialogRef.current?.querySelectorAll(FOCUSABLE);
-    (focusables?.[0] || dialogRef.current)?.focus();
-
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') { onClose?.(); return; }
-      if (e.key !== 'Tab') return;
-      const nodes = dialogRef.current?.querySelectorAll(FOCUSABLE);
-      if (!nodes?.length) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      previouslyFocused.current?.focus?.();
-    };
-  }, [open, onClose]);
+  // no way to close it without a mouse.
+  useFocusTrap(dialogRef, open, onClose);
 
   return (
     <AnimatePresence>
