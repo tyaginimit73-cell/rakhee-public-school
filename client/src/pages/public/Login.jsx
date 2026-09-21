@@ -16,8 +16,8 @@ const schema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-export default function Login() {
-  const { login } = useAuth();
+export default function Login({ adminOnly = false }) {
+  const { login, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +28,11 @@ export default function Login() {
     setSubmitting(true);
     try {
       const user = await login(values.email, values.password);
-      const dest = location.state?.from || ROLE_HOME[user.role] || '/parent';
+      if (adminOnly && user.role !== 'admin') {
+        await logout();
+        throw new Error('This page is for administrators only. Please use the portal login.');
+      }
+      const dest = adminOnly ? '/admin' : (location.state?.from || ROLE_HOME[user.role] || '/parent');
       navigate(dest, { replace: true });
     } catch (err) { toast.error(err.message); } finally { setSubmitting(false); }
   };
@@ -52,8 +56,8 @@ export default function Login() {
       <div className="flex items-center justify-center p-6 sm:p-10">
         <motion.div className="w-full max-w-md" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}>
           <div className="mb-8 lg:hidden"><Logo /></div>
-          <h2 className="font-display text-3xl font-semibold">Sign in</h2>
-          <p className="mt-2 text-sm text-muted">Use the credentials provided by the school office.</p>
+          <h2 className="font-display text-3xl font-semibold">{adminOnly ? 'Admin Sign in' : 'Sign in'}</h2>
+          <p className="mt-2 text-sm text-muted">{adminOnly ? 'Use your administrator credentials.' : 'Use the credentials provided by the school office.'}</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
             <Field label="Email Address" required error={errors.email?.message}>
@@ -82,7 +86,11 @@ export default function Login() {
               </div>
             </div>
           )}
-          <p className="mt-6 text-center text-sm text-muted"><Link to="/" className="font-semibold text-brand-600 hover:underline dark:text-brand-300">← Back to website</Link></p>
+          <p className="mt-6 text-center text-sm text-muted">
+            {adminOnly ? <Link to="/login" className="font-semibold text-brand-600 hover:underline dark:text-brand-300">Portal login</Link> : <Link to="/admin/login" className="font-semibold text-brand-600 hover:underline dark:text-brand-300">Admin login</Link>}
+            {' · '}
+            <Link to="/" className="font-semibold text-brand-600 hover:underline dark:text-brand-300">Back to website</Link>
+          </p>
         </motion.div>
       </div>
     </div>

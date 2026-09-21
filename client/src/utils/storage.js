@@ -18,3 +18,12 @@ export function setStored(key, value, area = 'local') {
     /* storage unavailable — ignore */
   }
 }
+
+export function removeStored(key, area = 'local') {
+  try {
+    const store = area === 'session' ? window.sessionStorage : window.localStorage;
+    store?.removeItem(key);
+  } catch {
+    /* storage unavailable — ignore */
+  }
+}

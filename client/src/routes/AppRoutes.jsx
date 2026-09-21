@@ -23,6 +23,7 @@ const Results = lazy(() => import('../pages/public/Results.jsx'));
 const Teachers = lazy(() => import('../pages/public/Teachers.jsx'));
 const Contact = lazy(() => import('../pages/public/Contact.jsx'));
 const Login = lazy(() => import('../pages/public/Login.jsx'));
+const AdminLogin = lazy(() => import('../pages/public/Login.jsx'));
 const { NotFound, Forbidden, ServerError } = { NotFound: lazy(() => import('../pages/public/ErrorPages.jsx').then((m) => ({ default: m.NotFound }))),
   Forbidden: lazy(() => import('../pages/public/ErrorPages.jsx').then((m) => ({ default: m.Forbidden }))),
   ServerError: lazy(() => import('../pages/public/ErrorPages.jsx').then((m) => ({ default: m.ServerError }))) };
@@ -103,6 +104,7 @@ export default function AppRoutes() {
       </Route>
 
       <Route path="login" element={L(<Login />)} />
+      <Route path="admin/login" element={L(<AdminLogin adminOnly />)} />
 
       {/* Old generic portal URL → redirect to the right role-specific one */}
       <Route path="portal" element={<ProtectedRoute roles={['parent', 'student', 'teacher']}><LegacyPortalRedirect /></ProtectedRoute>} />
